@@ -8,6 +8,7 @@ from sklearn.feature_selection import SelectKBest, mutual_info_regression, RFE
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor as skKNeighborsRegressor
 from src.preprocessing.BFS import BFS
+from src.preprocessing.NeuralNetworkFS import NeuralNetworkFS
 
 try:
     from cuml.neighbors import KNeighborsRegressor as cuKNeighborsRegressor
@@ -24,12 +25,16 @@ def apply_feature_selection(fs_strategy, X, y):
         selector = RFE(RandomForestRegressor(n_estimators=5), n_features_to_select=fs_strategy.get("k", 10))
     elif fs_strategy["name"] == "BFS":
         selector = BFS()
+    elif fs_strategy["name"] == "NNFS": 
+        selector = NeuralNetworkFS(input_shape=X.shape[1])
     else:
         raise ValueError("Invalid feature selection strategy")
 
     selector.fit(X, y)
-    if fs_strategy["name"] == "BFS":
+    if hasattr(selector, 'traceplot'):
         selector.traceplot()
+    elif hasattr(selector, 'plot_training_history'): 
+        selector.plot_training_history()
     return selector.transform(X), selector
 
 def preprocess_data(X):
