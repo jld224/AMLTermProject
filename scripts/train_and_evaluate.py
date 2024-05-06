@@ -7,6 +7,7 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from sklearn.feature_selection import SelectKBest, mutual_info_regression, RFE
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor as skKNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
 from src.preprocessing.BFS import BFS
 from src.preprocessing.NeuralNetworkFS import NeuralNetworkFS
 
@@ -25,7 +26,7 @@ def apply_feature_selection(fs_strategy, X, y):
         selector = RFE(RandomForestRegressor(n_estimators=5), n_features_to_select=fs_strategy.get("k", 10))
     elif fs_strategy["name"] == "BFS":
         selector = BFS()
-    elif fs_strategy["name"] == "NNFS": 
+    elif fs_strategy["name"] == "NN": 
         selector = NeuralNetworkFS(input_shape=X.shape[1])
     else:
         raise ValueError("Invalid feature selection strategy")
@@ -70,12 +71,47 @@ def run_experiment(X, y, model, model_params, feature_selection_strategies):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Model evaluation with feature selection.")
-    parser.add_argument("--model", type=str, choices=['knn'], help="Model name")
+    parser.add_argument("--model", type=str, choices=['knn', 'NN'], help="Model name")
     args = parser.parse_args()
 
     data = pd.read_csv("./data/processed.csv").dropna(subset=["η / mPa s"])
     X, y = data.drop("η / mPa s", axis=1), data["η / mPa s"].values
 
-    feature_selection_strategies = [{"name": "SelectKBest", "k": 8}, {"name": "RFE", "k": 10}, {"name": "BFS"}]
-    model_params = {"n_neighbors": 3} if args.model == "knn" else {}
-    run_experiment(X, y, KNeighborsRegressor, model_params, feature_selection_strategies)
+    feature_selection_strategies = [{"name": "SelectKBest", "k": 8}, {"name": "RFE", "k": 10}]
+
+    if args.model == "knn":
+        model_class = KNeighborsRegressor
+        model_params = {"n_neighbors": 3}
+    elif args.model == "NN":
+        model_class = MLPRegressor
+        model_params = {
+            "hidden_layer_sizes": (100, 50),  # tuple, length = n_layers - 2, default=(100,)
+            "activation": 'relu',            # {'identity', 'logistic', 'tanh', 'relu'}, default='relu'
+            "solver": 'adam',                # {'lbfgs', 'sgd', 'adam'}, default='adam'
+            "alpha": 0.0001,                 # float, default=0.0001. L2 penalty (regularization term)
+            "batch_size": 'auto',            # {'auto', int}, default='auto'. Size of minibatches for stochastic optimizers
+            "learning_rate": 'constant',     # {'constant', 'invscaling', 'adaptive'}, default='constant'
+            "learning_rate_init": 0.001,     # float, default=0.001. The initial learning rate
+            "power_t": 0.5,                  # float, default=0.5. The exponent for inverse scaling learning rate
+            "max_iter": 2000,                 # int, default=200. Maximum number of iterations.
+            "shuffle": True,                 # bool, default=True. Whether to shuffle samples in each iteration
+            "random_state": None,            # int, RandomState instance, default=None. Determines random number generation
+            "tol": 1e-4,                     # float, default=1e-4. Tolerance for the optimization
+            "verbose": False,                # bool, default=False. Whether to print progress messages to stdout
+            "warm_start": False,             # bool, default=False. Reuse the solution of the previous call to fit as initialization
+            "momentum": 0.9,                 # float, default=0.9. Momentum for gradient descent update
+            "nesterovs_momentum": True,      # bool, default=True. Whether to use Nesterov's momentum
+            "early_stopping": False,         # bool, default=False. Whether to use early stopping to terminate training when validation
+            "validation_fraction": 0.1,      # float, default=0.1. The proportion of training data to set aside as validation set
+            "beta_1": 0.9,                   # float, default=0.9. Exponential decay rate for estimates of first moment vector in adam
+            "beta_2": 0.999,                 # float, default=0.999. Exponential decay rate for estimates of second moment vector in adam
+            "epsilon": 1e-8,                 # float, default=1e-8. Value for numerical stability in adam
+            "n_iter_no_change": 10,          # int, default=10. Maximum number of epochs to not meet tol improvement
+            "max_fun": 15000                 # int, default=15000. Only for the 'lbfgs' solver. Maximum number of loss function calls.
+        }
+  # Adjust parameters as needed for your neural network
+    else:
+        raise ValueError("Invalid model name")
+
+    run_experiment(X, y, model_class, model_params, feature_selection_strategies)
+

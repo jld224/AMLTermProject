@@ -24,9 +24,9 @@ class NeuralNetworkFS:
         return model
 
     def fit(self, X_train, y_train, epochs=100, batch_size=32, validation_split=0.2):
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+        early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, verbose=1)
         self.history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-                                      validation_split=validation_split, callbacks=[early_stopping])
+                                      validation_split=validation_split, callbacks=[early_stopping], verbose=1)
 
         # Feature importance based on the weights (just a placeholder, more sophisticated methods can be applied)
         weights = self.model.layers[0].get_weights()[0]
