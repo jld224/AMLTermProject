@@ -5,6 +5,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 
+
 class PCAFeatureSelector:
     def __init__(self, n_components=None):
         self.n_components = n_components
@@ -21,12 +22,16 @@ class PCAFeatureSelector:
 
         # Determine the components to keep (those that explain significant variance)
         explained_variance = self.pca.explained_variance_ratio_
-        self.selected_components = np.where(explained_variance > 0.01)[0]  # Threshold can be adjusted
+        self.selected_components = np.where(explained_variance > 0.01)[
+            0
+        ]  # Threshold can be adjusted
 
     def transform(self, X):
         # Check if fit has been called
         if self.selected_components is None:
-            raise RuntimeError("PCA selector has not been fitted before transformation performed.")
+            raise RuntimeError(
+                "PCA selector has not been fitted before transformation performed."
+            )
 
         # Transform features
         X_normalized = self.scaler.transform(X)
@@ -36,17 +41,22 @@ class PCAFeatureSelector:
     def get_support(self):
         # Check if fit has been called
         if self.selected_components is None:
-            raise RuntimeError("PCA selector has not been fitted before calling get_support.")
-        
+            raise RuntimeError(
+                "PCA selector has not been fitted before calling get_support."
+            )
+
         # Create a boolean mask with the same length as the number of components
         support_mask = np.zeros(len(self.pca.components_), dtype=bool)
         support_mask[self.selected_components] = True
         return support_mask
 
-    def save_components(self):
-        # Ensure the 'results' directory exists
-        os.makedirs('results', exist_ok=True)
-
-        # Save the PCA components to a CSV file
-        components = pd.DataFrame(self.pca.components_[self.selected_components], columns=feature_names)
-        components.to_csv('results/pca_components.csv', index=False)
+    def get_feature_rankings(self):
+        if self.pca.components_ is None:
+            raise RuntimeError("The PCA model has not been fitted yet.")
+        component_contributions = np.abs(self.pca.components_).sum(axis=0)
+        rankings = sorted(
+            zip(self.feature_names, component_contributions),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        return rankings
