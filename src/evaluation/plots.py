@@ -83,18 +83,14 @@ def determine_cluster(values, num_clusters=5):
     Returns:
         np.array: Resultant corresponding list of cluster identifications.
     """
-    # Determine the quantile-based bins for the clusters
+    if values.isnull().any():
+        raise ValueError("NaN values present in input data for clustering.")
+    if values.nunique() < num_clusters:
+        raise ValueError("Not enough unique values to form distinct clusters.")
+
     quantiles = np.linspace(0, 1, num_clusters + 1)
     bin_edges = np.quantile(values, quantiles)
-
-    # Assign each value to a cluster based on the bin edges
-    clusters = np.digitize(
-        values, bin_edges, right=False
-    )  # This assigns bins from 1 to 5
-
-    # Offset clusters to be within the range of 0 to num_clusters - 1
-    clusters = clusters - 1
-
+    clusters = np.digitize(values, bin_edges, right=False) - 1
     return clusters
 
 
@@ -115,16 +111,23 @@ def plot_confusion_matrix(data, technique, **kwargs):
         data (pd.DataFrame): DataFrame of the entire resulting dataset.
         technique (string): Label for what feature selection technique we are looking at.
     """
+    if data.empty or data[f"{technique}_Predicted"].isnull().all():
+        print(f"Skipping plotting for {technique}: data is empty or all NaN.")
+        return
+    
     data[f"{technique} Predicted Cluster"] = determine_cluster(
         data[f"{technique}_Predicted"]
     ).astype(int)
-
+    
     true_clusters = data["True Cluster"]
     predicted_clusters = data[f"{technique} Predicted Cluster"]
 
     # Compute confusion matrix and related metrics
-    cm = confusion_matrix(true_clusters, predicted_clusters, labels=[0, 1, 2, 3, 4])
-    cm_normalized = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+    cm = confusion_matrix(true_clusters, predicted_clusters, labels=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    cm_sum = cm.sum(axis=1)[:, np.newaxis]
+    # Adding a small constant, epsilon, to avoid division by zero
+    epsilon = 1e-5  # Small constant
+    cm_normalized = cm.astype("float") / np.maximum(cm_sum, epsilon)
     precision = precision_score(
         true_clusters,
         predicted_clusters,
@@ -347,20 +350,25 @@ def main():
     file_path = "./results.xlsx"
     pred_data = pd.read_excel(file_path, sheet_name="Results")
     feature_data = pd.read_excel(file_path, sheet_name="Selected_Features")
-
+    
+    pred_data.ffill()  # Forward fill to handle NaNs
+    
     # Identify the feature selection techniques based on the column names
     prediction_columns = [col for col in pred_data.columns if "_Predicted" in col]
     techniques = [col.replace("_Predicted", "") for col in prediction_columns]
 
     # Calculate errors for each technique
     pred_data = calculate_errors(pred_data, techniques)
+    
+    print("Data after calculating errors:")
+    print(pred_data.head())  # Example debugging output
 
     # Generate plots
     plot_scatter(pred_data, techniques)
     plot_mae(pred_data, techniques)
     plot_feature_correspondance(feature_data, techniques)
 
-    # Plot the confusion matricess
+    # Plot the confusion matrices
     confusion_matrices(pred_data, techniques)
 
 
