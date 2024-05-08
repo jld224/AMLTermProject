@@ -25,7 +25,7 @@ def run_plotting():
     print("Plotting script completed.")
 
 if __name__ == "__main__":
-    run_preprocessing()
+    # run_preprocessing()
 
     models = ["NN"]
     for model in models:

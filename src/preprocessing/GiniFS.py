@@ -6,31 +6,21 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 
 class GiniImportanceSelector:
-    def __init__(self, n_estimators=100, random_state=42):
+    def __init__(self, n_estimators=100, random_state=42, importance_threshold=0.01):
         self.rf = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state)
         self.scaler = StandardScaler()
+        self.importance_threshold = importance_threshold
         self.selected_features = None
         self.importances = None
 
     def fit(self, X_train, y_train):
-        # Normalize features for better convergence
         X_normalized = self.scaler.fit_transform(X_train)
-
-        # Fit the RandomForest model
         self.rf.fit(X_normalized, y_train)
-
-        # Get feature importances
         self.importances = self.rf.feature_importances_
-
-        # Determine the features to keep (those with significant importance)
-        self.selected_features = np.where(self.importances > np.percentile(self.importances, 75))[0]  # Threshold at 75th percentile
+        # Select features based on importance threshold
+        self.selected_features = [i for i, imp in enumerate(self.importances) if imp >= self.importance_threshold]
 
     def transform(self, X):
-        # Check if fit has been called
-        if self.selected_features is None:
-            raise RuntimeError("GiniImportance selector has not been fitted before transformation performed.")
-
-        # Transform features
         X_normalized = self.scaler.transform(X)
         return X_normalized[:, self.selected_features]
 

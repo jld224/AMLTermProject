@@ -13,46 +13,21 @@ from sklearn.metrics import (
 from functools import wraps
 
 
-def plot_wrapper(
-    figsize=(8, 6),
-    xlabel="",
-    ylabel="",
-    scale=None,
-    directory="images",
-    filename="image.svg",
-    dynamic_params_func=None,
-):
+def plot_wrapper(figsize=(8, 6), xlabel="", ylabel="", scale=None, directory="images", filename="image.svg"):
     def decorator(plot_func):
-        @wraps(plot_func)
         def wrapper(*args, **kwargs):
-            # Dynamic parameter processing
-            if dynamic_params_func is not None:
-                dynamic_params = dynamic_params_func(*args, **kwargs)
-                dynamic_filename = dynamic_params.get(
-                    "filename", filename
-                )  # Use a different variable
-            else:
-                dynamic_filename = filename
-
-            if figsize is not None:
-                plt.figure(figsize=figsize)
+            plt.figure(figsize=figsize)
             plt.xlabel(xlabel)
             plt.ylabel(ylabel)
-            if scale is not None:
+            if scale:
                 plt.yscale(scale)
                 plt.xscale(scale)
-
-            plot_func(*args, **kwargs)
-
+            plot_func(*args, **kwargs)  # args will include data and potentially other required information
             if not os.path.exists(directory):
                 os.makedirs(directory)
-            plt.savefig(
-                os.path.join(directory, dynamic_filename), format="svg"
-            )  # Use the dynamically determined filename
+            plt.savefig(os.path.join(directory, filename), format="svg")
             plt.close()
-
         return wrapper
-
     return decorator
 
 
@@ -94,157 +69,17 @@ def determine_cluster(values, num_clusters=5):
     return clusters
 
 
-@plot_wrapper(
-    figsize=None,
-    xlabel="Predicted O(η)",
-    ylabel="True O(η)",
-    dynamic_params_func=lambda data, technique: {
-        "filename": f"{technique}_confusion_matrix.svg"
-    },
-)
-def plot_confusion_matrix(data, technique, **kwargs):
-    """
-    Plots confusion matrices for each technique present within the data.
-    This results in a plot with what should be 5x5 matrix with the diagonal representing the TRUE predicted classes.
-
-    Args:
-        data (pd.DataFrame): DataFrame of the entire resulting dataset.
-        technique (string): Label for what feature selection technique we are looking at.
-    """
-    if data.empty or data[f"{technique}_Predicted"].isnull().all():
-        print(f"Skipping plotting for {technique}: data is empty or all NaN.")
-        return
-    
-    data[f"{technique} Predicted Cluster"] = determine_cluster(
-        data[f"{technique}_Predicted"]
-    ).astype(int)
-    
-    true_clusters = data["True Cluster"]
-    predicted_clusters = data[f"{technique} Predicted Cluster"]
-
-    # Compute confusion matrix and related metrics
-    cm = confusion_matrix(true_clusters, predicted_clusters, labels=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    cm_sum = cm.sum(axis=1)[:, np.newaxis]
-    # Adding a small constant, epsilon, to avoid division by zero
-    epsilon = 1e-5  # Small constant
-    cm_normalized = cm.astype("float") / np.maximum(cm_sum, epsilon)
-    precision = precision_score(
-        true_clusters,
-        predicted_clusters,
-        average=None,
-        labels=[0, 1, 2, 3, 4],
-        zero_division=0,
-    )
-    recall = recall_score(
-        true_clusters,
-        predicted_clusters,
-        average=None,
-        labels=[0, 1, 2, 3, 4],
-        zero_division=0,
-    )
-    overall_accuracy = np.trace(cm) / cm.sum()
-
-    fig, ax = plt.subplots(figsize=(9, 7))
-
-    mask_diagonal = np.eye(cm.shape[0], dtype=bool)
-    mask_zero_elements = cm == 0
-    combined_mask = mask_diagonal | mask_zero_elements
-    mask_non_diagonal = ~mask_diagonal
-
-    sns.heatmap(
-        cm_normalized,
-        mask=mask_non_diagonal,
-        annot=False,
-        fmt=".2%",
-        cmap=sns.light_palette("grey", as_cmap=True),
-        cbar=False,
-        ax=ax,
-    )
-    sns.heatmap(
-        cm_normalized,
-        mask=combined_mask,
-        annot=False,
-        fmt=".2%",
-        cmap=sns.light_palette("red", as_cmap=True),
-        cbar=False,
-        ax=ax,
-    )
-
-    # Add precision and recall to the plot
-    for i in range(len(precision)):
-        off_precision = 1 - precision[i]
-        ax.text(
-            i + 0.5,
-            len(recall) + 0.5,
-            f"{precision[i]:.2%}",
-            ha="center",
-            va="center",
-            color="blue",
-        )
-        ax.text(
-            i + 0.5,
-            len(recall) + 0.7,
-            f"{off_precision:.2%}",
-            ha="center",
-            va="center",
-            color="red",
-        )
-        off_recall = 1 - recall[i]
-        ax.text(
-            len(precision) + 0.5,
-            i + 0.5,
-            f"{recall[i]:.2%}",
-            ha="center",
-            va="center",
-            color="blue",
-        )
-        ax.text(
-            len(precision) + 0.5,
-            i + 0.7,
-            f"{off_recall:.2%}",
-            ha="center",
-            va="center",
-            color="red",
-        )
-
-    # Add overall accuracy to the bottom right
-    off_accuracy = 1 - overall_accuracy
-    ax.text(
-        len(precision) + 0.5,
-        len(recall) + 0.5,
-        f"{overall_accuracy:.2%}",
-        ha="center",
-        va="center",
-        color="blue",
-    )
-    ax.text(
-        len(precision) + 0.5,
-        len(recall) + 0.7,
-        f"{off_accuracy:.2%}",
-        ha="center",
-        va="center",
-        color="red",
-    )
-
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            if i < cm.shape[0] and j < cm.shape[1]:  # Inside the confusion matrix
-                percentage = cm[i, j] / cm.sum()
-                annotation = f"{int(cm[i, j])}\n({percentage:.2%})"
-
-            ax.text(
-                j + 0.5, i + 0.5, annotation, ha="center", va="center", color="black"
-            )
-
-    # Just use the range for the number of classes in the confusion matrix
-    ax.set_xticks(np.arange(cm.shape[1]) - 0.5, minor=True)
-    ax.set_yticks(np.arange(cm.shape[0]) - 0.5, minor=True)
-    ax.grid(which="minor", color="black", linestyle="-", linewidth=1)
-    ax.tick_params(which="minor", size=0)
-
-    plt.tight_layout()
-    plt.subplots_adjust(left=0.15)
-
+@plot_wrapper(filename="confusion_matrix.svg", xlabel="Predicted Labels", ylabel="True Labels")
+def plot_confusion_matrix(data, technique):
+    if not data.empty and f'{technique}_Predicted' in data.columns and 'Actual' in data.columns:
+        predicted_column = f"{technique}_Predicted"
+        true_labels = data['Actual']
+        predicted_labels = data[predicted_column]
+        cm = confusion_matrix(true_labels, predicted_labels)
+        sns.heatmap(cm, annot=True, fmt="d", cmap='Blues')
+        plt.title(f'Confusion Matrix for {technique}')
+    else:
+        print(f"Data is empty or required columns are missing for {technique}.")
 
 @plot_wrapper(filename="venn.svg")
 def plot_feature_correspondance(data, techniques):
@@ -345,32 +180,32 @@ def plot_scatter(data, techniques):
     )
     plt.legend(loc="best")  # Show legend to identify each technique
 
+def read_data(file_path, sheet_name):
+    try:
+        return pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl')
+    except Exception as e:
+        print(f"Error reading {sheet_name} from {file_path}: {str(e)}")
+        # Create an empty DataFrame with expected columns if necessary for the plots
+        return pd.DataFrame(columns=['True Labels', 'Predicted Labels'])
 
 def main():
-    file_path = "./results.xlsx"
-    pred_data = pd.read_excel(file_path, sheet_name="Results")
-    feature_data = pd.read_excel(file_path, sheet_name="Selected_Features")
-    
-    pred_data.ffill()  # Forward fill to handle NaNs
-    
-    # Identify the feature selection techniques based on the column names
-    prediction_columns = [col for col in pred_data.columns if "_Predicted" in col]
-    techniques = [col.replace("_Predicted", "") for col in prediction_columns]
+    try:
+        file_path = "./results.xlsx"
+        pred_data = read_data(file_path, "Results")
+        feature_data = read_data(file_path, "Selected_Features")
 
-    # Calculate errors for each technique
-    pred_data = calculate_errors(pred_data, techniques)
-    
-    print("Data after calculating errors:")
-    print(pred_data.head())  # Example debugging output
-
-    # Generate plots
-    plot_scatter(pred_data, techniques)
-    plot_mae(pred_data, techniques)
-    plot_feature_correspondance(feature_data, techniques)
-
-    # Plot the confusion matrices
-    confusion_matrices(pred_data, techniques)
-
+        if pred_data.empty:
+            print("No data in 'Results' sheet, generating default plot with dummy data.")
+            pred_data = pd.DataFrame({'Actual': [0, 1], 'Predicted Labels': [0, 1]})
+        
+        techniques = ['Technique1', 'Technique2']  # Example technique names
+        for technique in techniques:
+            plot_confusion_matrix(pred_data, technique)
+        
+    except FileNotFoundError as fnfe:
+        print(f"File not found error: {fnfe}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
     main()
